@@ -1,0 +1,177 @@
+/*
+
+Cleaning Data in SQL Queries
+
+*/
+
+
+Select *
+From dbo.NashvilleHousingData
+
+--------------------------------------------------------------------------------------------------------------------------
+
+-- Standardize Date Format
+
+Select SaleDate,CONVERT(Date,SaleDate)
+From dbo.NashvilleHousingData
+
+UPDATE NashvilleHousingData 
+SET SaleDate = CONVERT(Date,SaleDate)
+
+
+-- Changed date format from showing Date and time to only showing date 'YYYY-MM-DD'
+
+ --------------------------------------------------------------------------------------------------------------------------
+
+-- Populate Property Address data
+
+SELECT PropertyAddress
+From dbo.NashvilleHousingData
+WHERE PropertyAddress IS NULL
+
+-- This shows the Purchases with the same ParcelIDs that have a NULL Values on the address for at least one Purchase
+
+Select a.ParcelID, a.PropertyAddress, b.ParcelID, b.PropertyAddress, ISNULL(a.PropertyAddress,b.PropertyAddress)
+From dbo.NashvilleHousingData a
+JOIN dbo.NashvilleHousingData b
+	on a.ParcelID = b.ParcelID
+	--AND a.[UniqueID ] <> b.[UniqueID ]
+Where a.PropertyAddress is null AND a.[UniqueID ] <> b.[UniqueID ]
+
+-- We have updated the Dataset to convert the null value in the address to the address provided on the other purchase
+
+UPDATE a
+SET PropertyAddress = ISNULL(a.PropertyAddress,b.PropertyAddress)
+From dbo.NashvilleHousingData a
+JOIN dbo.NashvilleHousingData b
+	on a.ParcelID = b.ParcelID
+Where a.PropertyAddress is null AND a.[UniqueID ] <> b.[UniqueID ]
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------
+
+-- Breaking out Address into Individual Columns (Address, City, State)
+
+SELECT PropertyAddress
+FROM ProfolioProject..NashvilleHousingData
+
+SELECT SUBSTRING(PropertyAddress, 1 ,CHARINDEX(',',PropertyAddress)-1 ) AS New_Address,
+SUBSTRING(PropertyAddress,CHARINDEX(',',PropertyAddress)+1, LEN(PropertyAddress)) AS Adress_City 
+FROM ProfolioProject..NashvilleHousingData
+
+ALTER TABLE ProfolioProject..NashvilleHousingData
+ADD PropertySplitAddress Nvarchar(255) 
+
+UPDATE ProfolioProject..NashvilleHousingData
+SET PropertySplitAddress = SUBSTRING(PropertyAddress, 1 ,CHARINDEX(',',PropertyAddress)-1 ) 
+
+ALTER TABLE ProfolioProject..NashvilleHousingData
+ADD PropertySplitCity Nvarchar(255) 
+
+UPDATE ProfolioProject..NashvilleHousingData
+SET PropertySplitCity = SUBSTRING(PropertyAddress,CHARINDEX(',',PropertyAddress)+1, LEN(PropertyAddress))
+
+SELECT PropertySplitAddress,PropertySplitCity,*
+FROM ProfolioProject..NashvilleHousingData
+
+
+--CHANGING THE OwnerAddress to seperate Address,City, and State
+
+SELECT PARSENAME(REPLACE(OwnerAddress,',','.'),3),PARSENAME(REPLACE(OwnerAddress,',','.'),2), 
+PARSENAME(REPLACE(OwnerAddress,',','.'),1)
+FROM ProfolioProject..NashvilleHousingData
+
+ALTER TABLE ProfolioProject..NashvilleHousingData
+ADD OwnerSplitAddress Nvarchar(255) 
+
+UPDATE ProfolioProject..NashvilleHousingData
+SET OwnerSplitAddress = PARSENAME(REPLACE(OwnerAddress,',','.'),3)
+
+ALTER TABLE ProfolioProject..NashvilleHousingData
+ADD OwnerSplitCity Nvarchar(255) 
+
+UPDATE ProfolioProject..NashvilleHousingData
+SET OwnerSplitCity = PARSENAME(REPLACE(OwnerAddress,',','.'),2)
+
+ALTER TABLE ProfolioProject..NashvilleHousingData
+ADD OwnerSplitState Nvarchar(255) 
+
+UPDATE ProfolioProject..NashvilleHousingData
+SET OwnerSplitState = PARSENAME(REPLACE(OwnerAddress,',','.'),1)
+
+SELECT * FROM ProfolioProject..NashvilleHousingData
+
+--------------------------------------------------------------------------------------------------------------------------
+
+
+-- Change Y and N to Yes and No in "Sold as Vacant" field
+SELECT DISTINCT(SoldAsVacant),COUNT(*)
+FROM ProfolioProject..NashvilleHousingData
+GROUP BY SoldAsVacant
+
+SELECT CASE 
+           WHEN SoldAsVacant = 1 THEN 'Yes'
+		   ELSE 'No'
+		   END
+FROM ProfolioProject..NashvilleHousingData
+
+UPDATE ProfolioProject..NashvilleHousingData
+SET SoldAsVacant = CASE WHEN SoldAsVacant = 1 THEN 'Yes'
+		                ELSE 'No'
+		                END
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- Remove Duplicates
+
+WITH RowNumCTE AS (
+Select *,
+	ROW_NUMBER() OVER (
+	PARTITION BY ParcelID,
+				 PropertyAddress,
+				 SalePrice,
+				 SaleDate,
+				 LegalReference
+				 ORDER BY
+				 UniqueID
+					) AS row_num
+
+From ProfolioProject..NashvilleHousingData 
+                                             )
+-- DELETE the duplicates from the Dataset
+
+DELETE
+From RowNumCTE
+Where row_num > 1
+
+
+
+-- Confirm duplicates are deleted
+
+Select *
+From ProfolioProject..NashvilleHousingData
+
+
+
+
+---------------------------------------------------------------------------------------------------------
+
+-- Delete Unused Columns
+
+
+Select *
+From ProfolioProject..NashvilleHousingData
+
+-- DROP some of the repetative/unuable columns in the dataset
+
+ALTER TABLE ProfolioProject..NashvilleHousingData
+DROP COLUMN OwnerAddress, TaxDistrict, PropertyAddress, SaleDate
+
+
